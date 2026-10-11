@@ -30,6 +30,27 @@
           <span class="status-text" id="statusText">Cập nhật: {{ initial_data.fetched_at }}</span>
         </div>
 
+        <!-- Công tắc bật/tắt Chế độ Tối / Sáng -->
+        <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Chuyển sang Chế độ tối" aria-label="Chuyển đổi giao diện Sáng / Tối">
+          <span class="theme-icon-container">
+            <svg class="theme-icon sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg class="theme-icon moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </span>
+          <span class="theme-label" id="themeLabel">Tối</span>
+        </button>
+
         <!-- Nút Làm mới với hiệu ứng xoay (spinner) -->
         <button id="refreshBtn" class="btn btn-primary" title="Cập nhật dữ liệu từ nguồn RSS/Atom Google Docs">
           <span class="spinner" id="refreshSpinner" aria-hidden="true"></span>
@@ -110,8 +131,18 @@
     <!-- Release Feed List -->
     <section class="feed-section">
       <div class="feed-header-meta">
-        <h2 class="feed-heading">Danh sách ghi chú phát hành</h2>
-        <span class="item-counter" id="itemCounter">Hiển thị <strong id="visibleCount">{{ initial_data.total_items }}</strong> cập nhật</span>
+        <div class="feed-heading-wrap">
+          <h2 class="feed-heading">Danh sách ghi chú phát hành</h2>
+          <span class="item-counter" id="itemCounter">Hiển thị <strong id="visibleCount">{{ initial_data.total_items }}</strong> cập nhật</span>
+        </div>
+        <button id="exportCsvBtn" class="btn btn-secondary btn-sm" title="Xuất toàn bộ danh sách cập nhật đang hiển thị sang tệp CSV">
+          <svg class="btn-icon-sm" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Xuất sang CSV</span>
+        </button>
       </div>
 
       <!-- Feed Container rendered via JS for interactivity -->

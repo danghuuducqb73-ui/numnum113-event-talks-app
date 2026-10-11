@@ -1,5 +1,7 @@
 /**
  * BigQuery Release Notes App - Pure Vanilla JavaScript
+ * Features: Refresh Feed with Spinner, Real-time Search & Filter,
+ * Twitter Share & Intent, Copy to Clipboard, Export to CSV, Dark/Light Theme Toggle
  */
 
 (function() {
@@ -19,8 +21,11 @@
   let activeCategoryFilter = 'ALL';
   let searchQuery = '';
   let currentModalItem = null;
+  let currentTheme = 'light';
 
   // DOM Elements
+  const themeToggleBtn = document.getElementById('themeToggleBtn');
+  const themeLabel = document.getElementById('themeLabel');
   const refreshBtn = document.getElementById('refreshBtn');
   const refreshBtnText = document.getElementById('refreshBtnText');
   const statusText = document.getElementById('statusText');
@@ -33,6 +38,7 @@
   const feedContainer = document.getElementById('feedContainer');
   const emptyState = document.getElementById('emptyState');
   const resetFilterBtn = document.getElementById('resetFilterBtn');
+  const exportCsvBtn = document.getElementById('exportCsvBtn');
 
   // Sticky Selected Bar
   const selectedBar = document.getElementById('selectedBar');
@@ -58,10 +64,12 @@
   const toastContainer = document.getElementById('toastContainer');
 
   // =========================================================================
-  // Initialize Application
+  // Initialize Application & Theme Setup
   // =========================================================================
 
   function init() {
+    initTheme();
+
     // Hydrate initial data passed from Flask template
     const rawInitial = document.getElementById('initialFeedData');
     if (rawInitial && rawInitial.textContent.trim()) {
@@ -77,13 +85,59 @@
     attachEventListeners();
   }
 
+  function initTheme() {
+    const savedTheme = localStorage.getItem('bq_theme');
+    if (savedTheme) {
+      currentTheme = savedTheme;
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      currentTheme = 'dark';
+    } else {
+      currentTheme = 'light';
+    }
+    applyTheme(currentTheme, false);
+  }
+
+  function applyTheme(theme, showNotification = true) {
+    currentTheme = theme;
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      if (themeLabel) themeLabel.textContent = 'Sáng';
+      if (themeToggleBtn) themeToggleBtn.title = 'Chuyển sang Chế độ sáng';
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      if (themeLabel) themeLabel.textContent = 'Tối';
+      if (themeToggleBtn) themeToggleBtn.title = 'Chuyển sang Chế độ tối';
+    }
+    localStorage.setItem('bq_theme', theme);
+
+    if (showNotification) {
+      const modeName = theme === 'dark' ? 'Chế độ tối (Dark Mode)' : 'Chế độ sáng (Light Mode)';
+      showToast(`Đã chuyển sang ${modeName}`, 'info', 2000);
+    }
+  }
+
+  function toggleTheme() {
+    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    applyTheme(nextTheme, true);
+  }
+
   // =========================================================================
   // Event Listeners
   // =========================================================================
 
   function attachEventListeners() {
+    // Theme Toggle Switch
+    if (themeToggleBtn) {
+      themeToggleBtn.addEventListener('click', toggleTheme);
+    }
+
     // Refresh Button with Spinner
     refreshBtn.addEventListener('click', handleRefresh);
+
+    // Export to CSV Button
+    if (exportCsvBtn) {
+      exportCsvBtn.addEventListener('click', handleExportCsv);
+    }
 
     // Search Input
     searchInput.addEventListener('input', function(e) {
@@ -159,7 +213,7 @@
       });
     });
 
-    // Copy Tweet Button
+    // Copy Tweet Button inside Modal
     copyTweetBtn.addEventListener('click', handleCopyTweet);
 
     // Open Twitter Web Intent Button
@@ -304,6 +358,13 @@
                 <span class="select-icon">${isSelected ? '✓' : '○'}</span>
                 <span>${isSelected ? 'Đang chọn' : 'Chọn bản này'}</span>
               </button>
+              <button type="button" class="copy-item-btn" data-action="copy-item" data-id="${item.id}" title="Sao chép nội dung bản cập nhật vào bảng nhớ tạm">
+                <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span class="copy-btn-text">Sao chép</span>
+              </button>
               <button type="button" class="quick-tweet-btn" data-action="quick-tweet" data-id="${item.id}" title="Đăng bản cập nhật này lên Twitter">
                 <svg class="twitter-icon" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
@@ -324,6 +385,13 @@
           toggleSelectItem(item);
         });
 
+        // Nút Sao chép vào bảng nhớ tạm trên mỗi thẻ
+        const copyBtn = itemCard.querySelector('[data-action="copy-item"]');
+        copyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          handleCopyItemContent(item, copyBtn);
+        });
+
         const quickTweetBtn = itemCard.querySelector('[data-action="quick-tweet"]');
         quickTweetBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -331,7 +399,7 @@
           openTweetModal(item);
         });
 
-        // Clicking the item card selects it
+        // Clicking the item card body selects it
         itemCard.addEventListener('click', () => {
           toggleSelectItem(item);
         });
@@ -345,6 +413,112 @@
 
     visibleCount.textContent = totalVisible;
     emptyState.classList.toggle('hidden', totalVisible > 0);
+  }
+
+  // =========================================================================
+  // Copy to Clipboard (Item Card)
+  // =========================================================================
+
+  async function handleCopyItemContent(item, btnElement) {
+    const formattedText = `[BigQuery Release Note - ${item.date}]
+Phân loại: ${item.category}
+Nội dung: ${item.full_text}
+Tài liệu: ${item.doc_link}`;
+
+    try {
+      await navigator.clipboard.writeText(formattedText);
+    } catch (err) {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = formattedText;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+
+    // Button visual feedback
+    const textSpan = btnElement.querySelector('.copy-btn-text');
+    btnElement.classList.add('copied');
+    if (textSpan) textSpan.textContent = '✓ Đã chép';
+
+    setTimeout(() => {
+      btnElement.classList.remove('copied');
+      if (textSpan) textSpan.textContent = 'Sao chép';
+    }, 2000);
+
+    showToast('Đã sao chép nội dung bản cập nhật vào bảng nhớ tạm!', 'success', 2500);
+  }
+
+  // =========================================================================
+  // Export to CSV
+  // =========================================================================
+
+  function handleExportCsv() {
+    if (!feedData.entries || feedData.entries.length === 0) {
+      showToast('Không có dữ liệu để xuất!', 'error');
+      return;
+    }
+
+    // Lọc các bản ghi đang hiển thị theo bộ lọc hiện tại
+    const itemsToExport = [];
+    feedData.entries.forEach(entry => {
+      entry.items.forEach(item => {
+        const matchCategory = (activeCategoryFilter === 'ALL') || 
+                              (item.category.toLowerCase() === activeCategoryFilter.toLowerCase());
+        const matchSearch = !searchQuery || 
+                            item.full_text.toLowerCase().includes(searchQuery) || 
+                            item.category.toLowerCase().includes(searchQuery) ||
+                            item.date.toLowerCase().includes(searchQuery);
+
+        if (matchCategory && matchSearch) {
+          itemsToExport.push(item);
+        }
+      });
+    });
+
+    if (itemsToExport.length === 0) {
+      showToast('Không có bản cập nhật nào phù hợp với bộ lọc để xuất!', 'error');
+      return;
+    }
+
+    // Escape CSV string
+    const escapeCsv = (str) => {
+      if (!str) return '""';
+      return `"${String(str).replace(/"/g, '""')}"`;
+    };
+
+    const headers = ['Ngày phát hành', 'Danh mục', 'Tóm tắt', 'Nội dung chi tiết', 'Liên kết tài liệu'];
+    const csvRows = [
+      headers.map(escapeCsv).join(',')
+    ];
+
+    itemsToExport.forEach(item => {
+      const row = [
+        escapeCsv(item.date),
+        escapeCsv(item.category),
+        escapeCsv(item.summary),
+        escapeCsv(item.full_text),
+        escapeCsv(item.doc_link)
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    // Thêm UTF-8 BOM (\uFEFF) để Excel mở hiển thị đúng tiếng Việt có dấu
+    const csvContent = '\uFEFF' + csvRows.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const downloadUrl = URL.createObjectURL(blob);
+
+    const dateSlug = new Date().toISOString().slice(0, 10);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `bigquery_release_notes_${dateSlug}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+
+    showToast(`Đã xuất thành công ${itemsToExport.length} bản cập nhật sang tệp CSV!`, 'success', 3500);
   }
 
   // =========================================================================
