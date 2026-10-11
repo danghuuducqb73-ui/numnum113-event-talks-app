@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BigQuery Release Notes Tracker & Twitter Publisher</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="header-brand">
+        <div class="logo-badge">
+          <svg class="bq-logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.6.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" fill="#4285F4"/>
+            <path d="M12 9v5l3.5 2.1.8-1.2-2.8-1.7V9z" fill="#1A73E8"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="app-title">BigQuery Release Notes</h1>
+          <p class="app-subtitle">Theo dõi cập nhật từ Google Cloud BigQuery &amp; Đăng tin tức lên Twitter</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text" id="statusText">Cập nhật: {{ initial_data.fetched_at }}</span>
+        </div>
+
+        <!-- Nút Làm mới với hiệu ứng xoay (spinner) -->
+        <button id="refreshBtn" class="btn btn-primary" title="Cập nhật dữ liệu từ nguồn RSS/Atom Google Docs">
+          <span class="spinner" id="refreshSpinner" aria-hidden="true"></span>
+          <svg class="btn-icon" id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/>
+          </svg>
+          <span id="refreshBtnText">Làm mới dữ liệu</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sticky Selected Item Bar (khi người dùng chọn 1 bản cập nhật) -->
+  <aside id="selectedBar" class="selected-bar hidden">
+    <div class="selected-bar-content">
+      <div class="selected-info">
+        <span class="selected-badge" id="selectedBadge">Feature</span>
+        <span class="selected-date" id="selectedDate">Ngày</span>
+        <span class="selected-summary-preview" id="selectedPreview">Tóm tắt cập nhật...</span>
+      </div>
+      <div class="selected-bar-actions">
+        <button id="tweetSelectedBtn" class="btn btn-twitter">
+          <svg class="twitter-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+          </svg>
+          Đăng lên Twitter / X
+        </button>
+        <button id="clearSelectionBtn" class="btn btn-secondary btn-sm" title="Bỏ chọn">
+          Bỏ chọn
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Container -->
+  <main class="main-container">
+    <!-- Controls Section: Stats & Filters -->
+    <section class="controls-card">
+      <div class="stats-row">
+        <div class="stat-item">
+          <span class="stat-number" id="statEntriesCount">{{ initial_data.total_entries }}</span>
+          <span class="stat-label">Đợt phát hành</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-number" id="statItemsCount">{{ initial_data.total_items }}</span>
+          <span class="stat-label">Mục cập nhật chi tiết</span>
+        </div>
+        <div class="stat-item" id="feedSourceInfo">
+          <span class="stat-number source-tag">XML Feed</span>
+          <a href="https://docs.cloud.google.com/feeds/bigquery-release-notes.xml" target="_blank" rel="noopener noreferrer" class="source-link">
+            Xem nguồn Atom ↗
+          </a>
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="searchInput" placeholder="Tìm kiếm nội dung (ví dụ: Gemini, Iceberg, SQL, SDK...)" autocomplete="off">
+          <button id="clearSearchBtn" class="clear-search-btn hidden" title="Xóa tìm kiếm">&times;</button>
+        </div>
+
+        <div class="category-filters" id="categoryFilters">
+          <button class="filter-pill active" data-category="ALL">Tất cả</button>
+          <button class="filter-pill" data-category="Feature">Tính năng (Feature)</button>
+          <button class="filter-pill" data-category="Change">Thay đổi (Change)</button>
+          <button class="filter-pill" data-category="Announcement">Thông báo</button>
+          <button class="filter-pill" data-category="Fixed">Sửa lỗi (Fixed)</button>
+          <button class="filter-pill" data-category="Security">Bảo mật</button>
+          <button class="filter-pill" data-category="Deprecated">Ngừng hỗ trợ</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Release Feed List -->
+    <section class="feed-section">
+      <div class="feed-header-meta">
+        <h2 class="feed-heading">Danh sách ghi chú phát hành</h2>
+        <span class="item-counter" id="itemCounter">Hiển thị <strong id="visibleCount">{{ initial_data.total_items }}</strong> cập nhật</span>
+      </div>
+
+      <!-- Feed Container rendered via JS for interactivity -->
+      <div id="feedContainer" class="feed-container">
+        <!-- Rendered by JavaScript dynamically -->
+      </div>
+
+      <!-- Empty state when no matches -->
+      <div id="emptyState" class="empty-state hidden">
+        <div class="empty-icon">🔍</div>
+        <h3>Không tìm thấy bản cập nhật nào phù hợp</h3>
+        <p>Vui lòng thử từ khóa tìm kiếm khác hoặc chọn danh mục khác.</p>
+        <button id="resetFilterBtn" class="btn btn-secondary">Đặt lại bộ lọc</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal Đăng Tweet / Twitter Modal -->
+  <div id="tweetModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-header-title">
+          <svg class="twitter-icon modal-x-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+          </svg>
+          <h3 id="modalTitle">Đăng thông tin lên Twitter / X</h3>
+        </div>
+        <button id="closeModalBtn" class="modal-close-btn" aria-label="Đóng modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-target-info">
+          <span class="badge" id="modalCategoryBadge">Feature</span>
+          <span class="modal-date" id="modalDate">Ngày</span>
+          <a id="modalDocLink" href="#" target="_blank" rel="noopener noreferrer" class="modal-doc-link">Xem tài liệu gốc ↗</a>
+        </div>
+
+        <label for="tweetContentArea" class="modal-label">Nội dung Tweet (có thể chỉnh sửa theo ý bạn):</label>
+        <textarea id="tweetContentArea" rows="6" maxlength="350" placeholder="Soạn nội dung tweet..."></textarea>
+
+        <div class="tweet-meta-bar">
+          <div class="hashtags-selector">
+            <span class="tag-label">Thêm hashtag:</span>
+            <button type="button" class="tag-add-btn" data-tag="#BigQuery">#BigQuery</button>
+            <button type="button" class="tag-add-btn" data-tag="#GoogleCloud">#GoogleCloud</button>
+            <button type="button" class="tag-add-btn" data-tag="#DataEngineering">#DataEngineering</button>
+            <button type="button" class="tag-add-btn" data-tag="#DataWarehouse">#DataWarehouse</button>
+          </div>
+          <div class="char-counter" id="charCounter">
+            <span id="charCount">0</span>/280
+          </div>
+        </div>
+
+        <!-- Optional Twitter Direct API Toggle -->
+        <details class="api-toggle-details">
+          <summary>⚙️ Tùy chọn nâng cao: Đăng trực tiếp qua Twitter API v2</summary>
+          <div class="api-fields">
+            <p class="api-note">Mặc định, bạn có thể bấm <strong>"Mở Twitter để đăng ngay"</strong> bên dưới để đăng trực tiếp mà không cần API key. Nếu bạn có tài khoản Developer Twitter, bạn có thể nhập Bearer Token bên dưới:</p>
+            <input type="password" id="bearerTokenInput" placeholder="Twitter Bearer Token (Tùy chọn)" class="input-text">
+            <button type="button" id="apiPostBtn" class="btn btn-secondary btn-sm">Gửi qua API Endpoint</button>
+          </div>
+        </details>
+      </div>
+
+      <div class="modal-footer">
+        <button id="copyTweetBtn" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Sao chép nội dung
+        </button>
+        <button id="openTwitterIntentBtn" class="btn btn-twitter-primary">
+          <svg class="twitter-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+          </svg>
+          Mở Twitter / X để đăng ngay
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <!-- Initial Data passed safely as JSON for hydration -->
+  <script id="initialFeedData" type="application/json">
+    {{ initial_data | tojson | safe }}
+  </script>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
