@@ -1,7 +1,9 @@
 /**
  * BigQuery Release Notes App - Pure Vanilla JavaScript
- * Features: Refresh Feed with Spinner, Real-time Search & Filter,
- * Twitter Share & Intent, Copy to Clipboard, Export to CSV, Dark/Light Theme Toggle
+ * Enhanced Version with:
+ * - Group 1: Search Highlighting, Back to Top, Collapsible Day Groups, Keyboard Shortcuts
+ * - Group 2: Bookmark/Favorites (⭐), Copy as Markdown (M↓), Filter by Saved
+ * - Group 3: Auto-sync Notification Banner, Mobile Bottom Sticky Bar
  */
 
 (function() {
@@ -14,7 +16,8 @@
     categories: {},
     total_entries: 0,
     total_items: 0,
-    fetched_at: ''
+    fetched_at: '',
+    feed_updated: ''
   };
 
   let selectedItemId = null;
@@ -22,23 +25,42 @@
   let searchQuery = '';
   let currentModalItem = null;
   let currentTheme = 'light';
+  let bookmarkedIds = new Set();
+  let isAllCollapsed = false;
+  let lastKnownFeedUpdated = '';
 
   // DOM Elements
   const themeToggleBtn = document.getElementById('themeToggleBtn');
   const themeLabel = document.getElementById('themeLabel');
+  const shortcutsBtn = document.getElementById('shortcutsBtn');
+  const shortcutsModal = document.getElementById('shortcutsModal');
+  const closeShortcutsModalBtn = document.getElementById('closeShortcutsModalBtn');
+
+  const newUpdateBanner = document.getElementById('newUpdateBanner');
+  const bannerRefreshBtn = document.getElementById('bannerRefreshBtn');
+  const bannerDismissBtn = document.getElementById('bannerDismissBtn');
+
   const refreshBtn = document.getElementById('refreshBtn');
   const refreshBtnText = document.getElementById('refreshBtnText');
   const statusText = document.getElementById('statusText');
   const statEntriesCount = document.getElementById('statEntriesCount');
   const statItemsCount = document.getElementById('statItemsCount');
+  const statSavedCount = document.getElementById('statSavedCount');
+  const bookmarkCountSpan = document.getElementById('bookmarkCount');
   const visibleCount = document.getElementById('visibleCount');
+
   const searchInput = document.getElementById('searchInput');
   const clearSearchBtn = document.getElementById('clearSearchBtn');
   const categoryFilters = document.getElementById('categoryFilters');
   const feedContainer = document.getElementById('feedContainer');
   const emptyState = document.getElementById('emptyState');
   const resetFilterBtn = document.getElementById('resetFilterBtn');
+
+  const toggleCollapseBtn = document.getElementById('toggleCollapseBtn');
+  const collapseIcon = document.getElementById('collapseIcon');
+  const collapseText = document.getElementById('collapseText');
   const exportCsvBtn = document.getElementById('exportCsvBtn');
+  const backToTopBtn = document.getElementById('backToTopBtn');
 
   // Sticky Selected Bar
   const selectedBar = document.getElementById('selectedBar');
@@ -64,17 +86,19 @@
   const toastContainer = document.getElementById('toastContainer');
 
   // =========================================================================
-  // Initialize Application & Theme Setup
+  // Initialize Application
   // =========================================================================
 
   function init() {
     initTheme();
+    loadBookmarks();
 
     // Hydrate initial data passed from Flask template
     const rawInitial = document.getElementById('initialFeedData');
     if (rawInitial && rawInitial.textContent.trim()) {
       try {
         feedData = JSON.parse(rawInitial.textContent);
+        lastKnownFeedUpdated = feedData.feed_updated || '';
       } catch (err) {
         console.error('Lỗi phân tích dữ liệu ban đầu:', err);
       }
@@ -83,7 +107,12 @@
     renderFeed();
     updateStats();
     attachEventListeners();
+    setupAutoSyncPolling();
   }
+
+  // =========================================================================
+  // Theme Management
+  // =========================================================================
 
   function initTheme() {
     const savedTheme = localStorage.getItem('bq_theme');
@@ -102,11 +131,11 @@
     if (theme === 'dark') {
       document.documentElement.setAttribute('data-theme', 'dark');
       if (themeLabel) themeLabel.textContent = 'Sáng';
-      if (themeToggleBtn) themeToggleBtn.title = 'Chuyển sang Chế độ sáng';
+      if (themeToggleBtn) themeToggleBtn.title = 'Chuyển sang Chế độ sáng (Phím T)';
     } else {
       document.documentElement.removeAttribute('data-theme');
       if (themeLabel) themeLabel.textContent = 'Tối';
-      if (themeToggleBtn) themeToggleBtn.title = 'Chuyển sang Chế độ tối';
+      if (themeToggleBtn) themeToggleBtn.title = 'Chuyển sang Chế độ tối (Phím T)';
     }
     localStorage.setItem('bq_theme', theme);
 
@@ -122,22 +151,107 @@
   }
 
   // =========================================================================
+  // Bookmarks Management
+  // =========================================================================
+
+  function loadBookmarks() {
+    try {
+      const stored = localStorage.getItem('bq_bookmarks');
+      if (stored) {
+        bookmarkedIds = new Set(JSON.parse(stored));
+      }
+    } catch (e) {
+      bookmarkedIds = new Set();
+    }
+    updateBookmarkCounts();
+  }
+
+  function saveBookmarks() {
+    localStorage.setItem('bq_bookmarks', JSON.stringify([...bookmarkedIds]));
+    updateBookmarkCounts();
+  }
+
+  function updateBookmarkCounts() {
+    const count = bookmarkedIds.size;
+    if (statSavedCount) statSavedCount.textContent = count;
+    if (bookmarkCountSpan) bookmarkCountSpan.textContent = count;
+  }
+
+  function toggleBookmark(item, btnElement) {
+    const isSaved = bookmarkedIds.has(item.id);
+    if (isSaved) {
+      bookmarkedIds.delete(item.id);
+      showToast('Đã bỏ lưu bản cập nhật', 'info', 2000);
+    } else {
+      bookmarkedIds.add(item.id);
+      showToast('Đã lưu bản cập nhật vào danh sách yêu thích ⭐', 'success', 2500);
+    }
+    saveBookmarks();
+
+    // Update button visual
+    if (btnElement) {
+      btnElement.classList.toggle('bookmarked', !isSaved);
+      btnElement.innerHTML = `<span>${!isSaved ? '★' : '☆'}</span>`;
+      btnElement.title = !isSaved ? 'Bỏ lưu' : 'Lưu bản cập nhật này';
+    }
+
+    // If currently filtered by Bookmarked, re-render feed
+    if (activeCategoryFilter === 'BOOKMARKED') {
+      renderFeed();
+    }
+  }
+
+  // =========================================================================
   // Event Listeners
   // =========================================================================
 
   function attachEventListeners() {
     // Theme Toggle Switch
-    if (themeToggleBtn) {
-      themeToggleBtn.addEventListener('click', toggleTheme);
+    if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
+
+    // Shortcuts Modal
+    if (shortcutsBtn) shortcutsBtn.addEventListener('click', openShortcutsModal);
+    if (closeShortcutsModalBtn) closeShortcutsModalBtn.addEventListener('click', closeShortcutsModal);
+    if (shortcutsModal) {
+      shortcutsModal.addEventListener('click', function(e) {
+        if (e.target === shortcutsModal) closeShortcutsModal();
+      });
+    }
+
+    // Auto-sync Banner Actions
+    if (bannerRefreshBtn) {
+      bannerRefreshBtn.addEventListener('click', () => {
+        newUpdateBanner.classList.add('hidden');
+        handleRefresh();
+      });
+    }
+    if (bannerDismissBtn) {
+      bannerDismissBtn.addEventListener('click', () => {
+        newUpdateBanner.classList.add('hidden');
+      });
     }
 
     // Refresh Button with Spinner
     refreshBtn.addEventListener('click', handleRefresh);
 
     // Export to CSV Button
-    if (exportCsvBtn) {
-      exportCsvBtn.addEventListener('click', handleExportCsv);
+    if (exportCsvBtn) exportCsvBtn.addEventListener('click', handleExportCsv);
+
+    // Collapse / Expand All Button
+    if (toggleCollapseBtn) toggleCollapseBtn.addEventListener('click', handleToggleCollapseAll);
+
+    // Back to Top Button & Scroll Listener
+    if (backToTopBtn) {
+      backToTopBtn.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
     }
+
+    window.addEventListener('scroll', () => {
+      if (backToTopBtn) {
+        backToTopBtn.classList.toggle('hidden', window.scrollY < 350);
+      }
+    }, { passive: true });
 
     // Search Input
     searchInput.addEventListener('input', function(e) {
@@ -154,7 +268,7 @@
       searchInput.focus();
     });
 
-    // Category Filter Pills
+    // Category & Bookmark Filter Pills
     categoryFilters.addEventListener('click', function(e) {
       const btn = e.target.closest('.filter-pill');
       if (!btn) return;
@@ -186,21 +300,16 @@
       }
     });
 
-    clearSelectionBtn.addEventListener('click', function() {
-      deselectItem();
-    });
+    clearSelectionBtn.addEventListener('click', deselectItem);
 
-    // Modal Events
+    // Tweet Modal Events
     closeModalBtn.addEventListener('click', closeTweetModal);
     tweetModal.addEventListener('click', function(e) {
       if (e.target === tweetModal) closeTweetModal();
     });
 
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && !tweetModal.classList.contains('hidden')) {
-        closeTweetModal();
-      }
-    });
+    // Global Keyboard Shortcuts
+    document.addEventListener('keydown', handleGlobalKeyboardShortcuts);
 
     // Tweet Content Input & Character Counter
     tweetContentArea.addEventListener('input', updateCharCounter);
@@ -208,8 +317,7 @@
     // Hashtags quick-add buttons
     document.querySelectorAll('.tag-add-btn').forEach(btn => {
       btn.addEventListener('click', function() {
-        const tag = this.dataset.tag;
-        insertHashtag(tag);
+        insertHashtag(this.dataset.tag);
       });
     });
 
@@ -223,6 +331,70 @@
     apiPostBtn.addEventListener('click', handleApiPost);
   }
 
+  function handleGlobalKeyboardShortcuts(e) {
+    const isInputActive = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+
+    // Escape: close modals or clear search
+    if (e.key === 'Escape') {
+      if (!tweetModal.classList.contains('hidden')) {
+        closeTweetModal();
+        return;
+      }
+      if (shortcutsModal && !shortcutsModal.classList.contains('hidden')) {
+        closeShortcutsModal();
+        return;
+      }
+      if (searchQuery.length > 0) {
+        searchInput.value = '';
+        searchQuery = '';
+        clearSearchBtn.classList.add('hidden');
+        renderFeed();
+        return;
+      }
+    }
+
+    // Shortcuts only when NOT typing inside inputs
+    if (!isInputActive) {
+      if (e.key === '/') {
+        e.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+      } else if (e.key === 't' || e.key === 'T') {
+        toggleTheme();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        handleRefresh();
+      } else if (e.key === 'c' || e.key === 'C') {
+        handleToggleCollapseAll();
+      } else if (e.key === '?') {
+        e.preventDefault();
+        openShortcutsModal();
+      }
+    }
+  }
+
+  function openShortcutsModal() {
+    if (shortcutsModal) shortcutsModal.classList.remove('hidden');
+  }
+
+  function closeShortcutsModal() {
+    if (shortcutsModal) shortcutsModal.classList.add('hidden');
+  }
+
+  // =========================================================================
+  // Accordion Collapse All / Expand All
+  // =========================================================================
+
+  function handleToggleCollapseAll() {
+    isAllCollapsed = !isAllCollapsed;
+    document.querySelectorAll('.release-day-group').forEach(group => {
+      group.classList.toggle('collapsed', isAllCollapsed);
+    });
+
+    if (collapseIcon) collapseIcon.textContent = isAllCollapsed ? '📂' : '📁';
+    if (collapseText) collapseText.textContent = isAllCollapsed ? 'Mở rộng tất cả' : 'Thu gọn tất cả';
+  }
+
   // =========================================================================
   // Refresh Feed with Spinner
   // =========================================================================
@@ -230,7 +402,6 @@
   async function handleRefresh() {
     if (refreshBtn.disabled) return;
 
-    // Set loading state with rotating spinner
     refreshBtn.disabled = true;
     refreshBtn.classList.add('loading');
     refreshBtnText.textContent = 'Đang tải dữ liệu...';
@@ -252,6 +423,7 @@
       }
 
       feedData = data;
+      lastKnownFeedUpdated = data.feed_updated || '';
       renderFeed();
       updateStats();
 
@@ -261,7 +433,6 @@
         showToast('Đã làm mới dữ liệu BigQuery Release Notes thành công!', 'success', 4000);
       }
 
-      // Animate feed container to highlight new content
       feedContainer.style.opacity = '0.3';
       setTimeout(() => {
         feedContainer.style.transition = 'opacity 0.4s ease';
@@ -272,7 +443,6 @@
       console.error('Lỗi khi làm mới dữ liệu:', err);
       showToast(`Không thể cập nhật: ${err.message}`, 'error', 5000);
     } finally {
-      // Revert button state
       refreshBtn.disabled = false;
       refreshBtn.classList.remove('loading');
       refreshBtnText.textContent = 'Làm mới dữ liệu';
@@ -280,8 +450,34 @@
   }
 
   // =========================================================================
-  // Render Feed & Filter Items
+  // Auto-sync Polling (Background check every 5 minutes)
   // =========================================================================
+
+  function setupAutoSyncPolling() {
+    setInterval(async () => {
+      try {
+        const resp = await fetch('/api/feed');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.feed_updated && lastKnownFeedUpdated && data.feed_updated !== lastKnownFeedUpdated) {
+          if (newUpdateBanner) newUpdateBanner.classList.remove('hidden');
+        }
+      } catch (e) {
+        // Silent background check error
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+  }
+
+  // =========================================================================
+  // Render Feed with Search Highlighting & Accordion
+  // =========================================================================
+
+  function highlightMatches(text, query) {
+    if (!query || !text) return text;
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escapedQuery})`, 'gi');
+    return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+  }
 
   function renderFeed() {
     feedContainer.innerHTML = '';
@@ -296,28 +492,31 @@
     feedData.entries.forEach(entry => {
       // Filter items inside this entry
       const filteredItems = entry.items.filter(item => {
-        // Category check
-        const matchCategory = (activeCategoryFilter === 'ALL') || 
-                              (item.category.toLowerCase() === activeCategoryFilter.toLowerCase());
-        
+        // Bookmark filter
+        if (activeCategoryFilter === 'BOOKMARKED') {
+          if (!bookmarkedIds.has(item.id)) return false;
+        } else if (activeCategoryFilter !== 'ALL') {
+          if (item.category.toLowerCase() !== activeCategoryFilter.toLowerCase()) return false;
+        }
+
         // Search query check
         const matchSearch = !searchQuery || 
                             item.full_text.toLowerCase().includes(searchQuery) || 
                             item.category.toLowerCase().includes(searchQuery) ||
                             item.date.toLowerCase().includes(searchQuery);
 
-        return matchCategory && matchSearch;
+        return matchSearch;
       });
 
       if (filteredItems.length === 0) return; // Skip dates with no matching items
 
       totalVisible += filteredItems.length;
 
-      // Create group card for this release date
+      // Group card for this release date
       const groupCard = document.createElement('article');
-      groupCard.className = 'release-day-group';
+      groupCard.className = `release-day-group ${isAllCollapsed ? 'collapsed' : ''}`;
 
-      // Header of the day
+      // Header of the day (clickable accordion)
       const dayHeader = document.createElement('div');
       dayHeader.className = 'release-day-header';
       dayHeader.innerHTML = `
@@ -328,12 +527,19 @@
             <line x1="8" y1="2" x2="8" y2="6"></line>
             <line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
-          <span>${escapeHtml(entry.title)}</span>
+          <span>${highlightMatches(escapeHtml(entry.title), searchQuery)}</span>
+          <span class="collapse-indicator">▼</span>
         </div>
-        <a href="${escapeHtml(entry.doc_link)}" target="_blank" rel="noopener noreferrer" class="release-doc-link">
+        <a href="${escapeHtml(entry.doc_link)}" target="_blank" rel="noopener noreferrer" class="release-doc-link" onclick="event.stopPropagation();">
           Xem tài liệu chính thức ↗
         </a>
       `;
+
+      // Accordion click on header
+      dayHeader.addEventListener('click', () => {
+        groupCard.classList.toggle('collapsed');
+      });
+
       groupCard.appendChild(dayHeader);
 
       // Sub-items list
@@ -342,11 +548,19 @@
 
       filteredItems.forEach(item => {
         const isSelected = (item.id === selectedItemId);
+        const isBookmarked = bookmarkedIds.has(item.id);
+
         const itemCard = document.createElement('div');
         itemCard.className = `release-item-card ${isSelected ? 'selected' : ''}`;
         itemCard.dataset.itemId = item.id;
 
         const badgeClass = getBadgeClass(item.category);
+
+        // Highlight matching query inside HTML body if searching
+        let renderedHtml = item.html;
+        if (searchQuery) {
+          renderedHtml = highlightMatches(renderedHtml, searchQuery);
+        }
 
         itemCard.innerHTML = `
           <div class="item-top-bar">
@@ -354,18 +568,30 @@
               <span class="badge ${badgeClass}">${escapeHtml(item.category)}</span>
             </div>
             <div class="item-actions-group">
+              <!-- Bookmark Star -->
+              <button type="button" class="bookmark-btn ${isBookmarked ? 'bookmarked' : ''}" data-action="bookmark" data-id="${item.id}" title="${isBookmarked ? 'Bỏ lưu' : 'Lưu bản cập nhật này (Bookmark)'}">
+                <span>${isBookmarked ? '★' : '☆'}</span>
+              </button>
+              <!-- Select Button -->
               <button type="button" class="select-item-btn" data-action="select" data-id="${item.id}">
                 <span class="select-icon">${isSelected ? '✓' : '○'}</span>
                 <span>${isSelected ? 'Đang chọn' : 'Chọn bản này'}</span>
               </button>
-              <button type="button" class="copy-item-btn" data-action="copy-item" data-id="${item.id}" title="Sao chép nội dung bản cập nhật vào bảng nhớ tạm">
+              <!-- Copy Text Button -->
+              <button type="button" class="copy-item-btn" data-action="copy-item" data-id="${item.id}" title="Sao chép nội dung văn bản">
                 <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
                 <span class="copy-btn-text">Sao chép</span>
               </button>
-              <button type="button" class="quick-tweet-btn" data-action="quick-tweet" data-id="${item.id}" title="Đăng bản cập nhật này lên Twitter">
+              <!-- Copy Markdown Button -->
+              <button type="button" class="copy-md-btn" data-action="copy-md" data-id="${item.id}" title="Sao chép dưới dạng Markdown">
+                <span class="md-icon">M↓</span>
+                <span class="md-btn-text">Markdown</span>
+              </button>
+              <!-- Twitter Button -->
+              <button type="button" class="quick-tweet-btn" data-action="quick-tweet" data-id="${item.id}" title="Đăng lên Twitter">
                 <svg class="twitter-icon" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                 </svg>
@@ -374,22 +600,33 @@
             </div>
           </div>
           <div class="item-body-html">
-            ${item.html}
+            ${renderedHtml}
           </div>
         `;
 
-        // Card button click events
+        // Card button events
+        const bookmarkBtn = itemCard.querySelector('[data-action="bookmark"]');
+        bookmarkBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleBookmark(item, bookmarkBtn);
+        });
+
         const selectBtn = itemCard.querySelector('[data-action="select"]');
         selectBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           toggleSelectItem(item);
         });
 
-        // Nút Sao chép vào bảng nhớ tạm trên mỗi thẻ
         const copyBtn = itemCard.querySelector('[data-action="copy-item"]');
         copyBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           handleCopyItemContent(item, copyBtn);
+        });
+
+        const copyMdBtn = itemCard.querySelector('[data-action="copy-md"]');
+        copyMdBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          handleCopyMarkdown(item, copyMdBtn);
         });
 
         const quickTweetBtn = itemCard.querySelector('[data-action="quick-tweet"]');
@@ -399,7 +636,7 @@
           openTweetModal(item);
         });
 
-        // Clicking the item card body selects it
+        // Clicking the item card selects it
         itemCard.addEventListener('click', () => {
           toggleSelectItem(item);
         });
@@ -416,8 +653,23 @@
   }
 
   // =========================================================================
-  // Copy to Clipboard (Item Card)
+  // Copy to Clipboard (Plain Text & Markdown)
   // =========================================================================
+
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      const success = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return success;
+    }
+  }
 
   async function handleCopyItemContent(item, btnElement) {
     const formattedText = `[BigQuery Release Note - ${item.date}]
@@ -425,19 +677,8 @@ Phân loại: ${item.category}
 Nội dung: ${item.full_text}
 Tài liệu: ${item.doc_link}`;
 
-    try {
-      await navigator.clipboard.writeText(formattedText);
-    } catch (err) {
-      // Fallback
-      const ta = document.createElement('textarea');
-      ta.value = formattedText;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-    }
+    await copyToClipboard(formattedText);
 
-    // Button visual feedback
     const textSpan = btnElement.querySelector('.copy-btn-text');
     btnElement.classList.add('copied');
     if (textSpan) textSpan.textContent = '✓ Đã chép';
@@ -450,6 +691,26 @@ Tài liệu: ${item.doc_link}`;
     showToast('Đã sao chép nội dung bản cập nhật vào bảng nhớ tạm!', 'success', 2500);
   }
 
+  async function handleCopyMarkdown(item, btnElement) {
+    const mdText = `### [BigQuery Update] ${item.date} - ${item.category}
+${item.full_text}
+
+- [Xem tài liệu chính thức](${item.doc_link})`;
+
+    await copyToClipboard(mdText);
+
+    const textSpan = btnElement.querySelector('.md-btn-text');
+    btnElement.classList.add('copied');
+    if (textSpan) textSpan.textContent = '✓ Đã chép';
+
+    setTimeout(() => {
+      btnElement.classList.remove('copied');
+      if (textSpan) textSpan.textContent = 'Markdown';
+    }, 2000);
+
+    showToast('Đã sao chép nội dung dưới dạng Markdown!', 'success', 2500);
+  }
+
   // =========================================================================
   // Export to CSV
   // =========================================================================
@@ -460,20 +721,21 @@ Tài liệu: ${item.doc_link}`;
       return;
     }
 
-    // Lọc các bản ghi đang hiển thị theo bộ lọc hiện tại
     const itemsToExport = [];
     feedData.entries.forEach(entry => {
       entry.items.forEach(item => {
-        const matchCategory = (activeCategoryFilter === 'ALL') || 
-                              (item.category.toLowerCase() === activeCategoryFilter.toLowerCase());
+        if (activeCategoryFilter === 'BOOKMARKED') {
+          if (!bookmarkedIds.has(item.id)) return;
+        } else if (activeCategoryFilter !== 'ALL') {
+          if (item.category.toLowerCase() !== activeCategoryFilter.toLowerCase()) return;
+        }
+
         const matchSearch = !searchQuery || 
                             item.full_text.toLowerCase().includes(searchQuery) || 
                             item.category.toLowerCase().includes(searchQuery) ||
                             item.date.toLowerCase().includes(searchQuery);
 
-        if (matchCategory && matchSearch) {
-          itemsToExport.push(item);
-        }
+        if (matchSearch) itemsToExport.push(item);
       });
     });
 
@@ -482,29 +744,24 @@ Tài liệu: ${item.doc_link}`;
       return;
     }
 
-    // Escape CSV string
     const escapeCsv = (str) => {
       if (!str) return '""';
       return `"${String(str).replace(/"/g, '""')}"`;
     };
 
     const headers = ['Ngày phát hành', 'Danh mục', 'Tóm tắt', 'Nội dung chi tiết', 'Liên kết tài liệu'];
-    const csvRows = [
-      headers.map(escapeCsv).join(',')
-    ];
+    const csvRows = [headers.map(escapeCsv).join(',')];
 
     itemsToExport.forEach(item => {
-      const row = [
+      csvRows.push([
         escapeCsv(item.date),
         escapeCsv(item.category),
         escapeCsv(item.summary),
         escapeCsv(item.full_text),
         escapeCsv(item.doc_link)
-      ];
-      csvRows.push(row.join(','));
+      ].join(','));
     });
 
-    // Thêm UTF-8 BOM (\uFEFF) để Excel mở hiển thị đúng tiếng Việt có dấu
     const csvContent = '\uFEFF' + csvRows.join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const downloadUrl = URL.createObjectURL(blob);
@@ -536,7 +793,6 @@ Tài liệu: ${item.doc_link}`;
   function selectItem(item) {
     selectedItemId = item.id;
 
-    // Update UI highlights
     document.querySelectorAll('.release-item-card').forEach(card => {
       const isSelected = card.dataset.itemId === item.id;
       card.classList.toggle('selected', isSelected);
@@ -549,7 +805,6 @@ Tài liệu: ${item.doc_link}`;
       }
     });
 
-    // Update sticky banner
     selectedBadge.className = `selected-badge ${getBadgeClass(item.category)}`;
     selectedBadge.textContent = item.category;
     selectedDate.textContent = item.date;
@@ -585,17 +840,14 @@ Tài liệu: ${item.doc_link}`;
   function openTweetModal(item) {
     currentModalItem = item;
 
-    // Fill modal info
     modalCategoryBadge.className = `badge ${getBadgeClass(item.category)}`;
     modalCategoryBadge.textContent = item.category;
     modalDate.textContent = item.date;
     modalDocLink.href = item.doc_link;
 
-    // Pre-fill tweet content
     tweetContentArea.value = item.tweet_draft;
     updateCharCounter();
 
-    // Show modal
     tweetModal.classList.remove('hidden');
     tweetContentArea.focus();
   }
@@ -621,10 +873,8 @@ Tài liệu: ${item.doc_link}`;
   function insertHashtag(tag) {
     let currentText = tweetContentArea.value;
     if (currentText.includes(tag)) {
-      // Remove tag if already present
       currentText = currentText.replace(new RegExp(`\\s*${tag}`, 'g'), '').trim();
     } else {
-      // Append tag
       currentText = currentText.trim() + ' ' + tag;
     }
     tweetContentArea.value = currentText;
@@ -643,10 +893,7 @@ Tài liệu: ${item.doc_link}`;
       if (!confirmPost) return;
     }
 
-    // Twitter Web Intent URL
     const tweetIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-    
-    // Open in a standard centered popup window or new tab
     const width = 600;
     const height = 480;
     const left = Math.max(0, (window.innerWidth - width) / 2 + window.screenX);
@@ -668,15 +915,8 @@ Tài liệu: ${item.doc_link}`;
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast('Đã sao chép nội dung Tweet vào bộ nhớ tạm!', 'success');
-    } catch (err) {
-      // Fallback
-      tweetContentArea.select();
-      document.execCommand('copy');
-      showToast('Đã sao chép nội dung Tweet!', 'success');
-    }
+    await copyToClipboard(text);
+    showToast('Đã sao chép nội dung Tweet vào bộ nhớ tạm!', 'success');
   }
 
   async function handleApiPost() {
@@ -729,6 +969,7 @@ Tài liệu: ${item.doc_link}`;
     statEntriesCount.textContent = feedData.total_entries || '0';
     statItemsCount.textContent = feedData.total_items || '0';
     statusText.textContent = `Cập nhật: ${feedData.fetched_at || 'Mới tải'}`;
+    updateBookmarkCounts();
   }
 
   function getBadgeClass(category) {

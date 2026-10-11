@@ -1,6 +1,15 @@
 /* ==========================================================================
    BigQuery Release Notes Tracker - Pure CSS Stylesheet
-   With Dark / Light Mode Theme Support via CSS Root Variables Override
+   Features:
+   - Light & Dark Mode via CSS Root Variables Override (:root[data-theme="dark"])
+   - Search Keyword Highlighting (<mark class="search-highlight">)
+   - Bookmark Star Styling & Filter Pills
+   - Accordion Collapsible Day Groups (.collapsed)
+   - Copy as Markdown & Plain Text
+   - Auto-Sync Live Notification Banner
+   - Floating Back to Top Button
+   - Keyboard Shortcuts Modal
+   - Mobile Sticky Action Bar (Bottom Navigation)
    ========================================================================== */
 
 /* Light Mode (Mặc định) */
@@ -29,6 +38,9 @@
 
   --code-bg: #f1f5f9;
   --code-text: #0f172a;
+
+  --highlight-bg: #fef08a;
+  --highlight-text: #854d0e;
 
   --modal-backdrop: rgba(15, 23, 42, 0.6);
   --modal-footer-bg: #f8fafc;
@@ -69,6 +81,9 @@
   --code-bg: #0f172a;
   --code-text: #e2e8f0;
 
+  --highlight-bg: #854d0e;
+  --highlight-text: #fef08a;
+
   --modal-backdrop: rgba(0, 0, 0, 0.75);
   --modal-footer-bg: #0f172a;
 
@@ -94,6 +109,51 @@ body {
 }
 
 /* ==========================================================================
+   Auto-sync Notification Banner
+   ========================================================================== */
+
+.new-update-banner {
+  background: linear-gradient(90deg, #1e40af, #2563eb);
+  color: #ffffff;
+  padding: 0.6rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+  animation: slideDown 0.3s ease;
+}
+
+.new-update-banner.hidden {
+  display: none;
+}
+
+.banner-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+
+.banner-text {
+  font-weight: 500;
+}
+
+.banner-close-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 1.35rem;
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.8;
+  transition: opacity 0.15s ease;
+}
+
+.banner-close-btn:hover {
+  opacity: 1;
+}
+
+/* ==========================================================================
    Header Styles
    ========================================================================== */
 
@@ -110,11 +170,11 @@ body {
 .header-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 1rem 1.5rem;
+  padding: 0.85rem 1.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
+  gap: 1.25rem;
   flex-wrap: wrap;
 }
 
@@ -155,7 +215,7 @@ body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
@@ -353,12 +413,12 @@ body {
 }
 
 /* ==========================================================================
-   Sticky Selection Bar
+   Sticky Selection Bar (Desktop: Top, Mobile: Bottom)
    ========================================================================== */
 
 .selected-bar {
   position: sticky;
-  top: 73px;
+  top: 67px;
   z-index: 35;
   background: #1e293b;
   color: #ffffff;
@@ -530,7 +590,7 @@ body {
 
 .search-box input {
   width: 100%;
-  padding: 0.6rem 2.2rem 0.6rem 2.5rem;
+  padding: 0.6rem 3.5rem 0.6rem 2.5rem;
   font-size: 0.9rem;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
@@ -545,6 +605,23 @@ body {
   background-color: var(--bg-card);
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.search-kbd {
+  position: absolute;
+  right: 2.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  padding: 0.15rem 0.4rem;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  border-radius: 4px;
+  pointer-events: none;
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
 }
 
 .clear-search-btn {
@@ -592,6 +669,17 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.bookmark-pill {
+  color: #d97706 !important;
+  border-color: #fcd34d !important;
+}
+
+.bookmark-pill.active {
+  background-color: #d97706 !important;
+  color: #ffffff !important;
+  border-color: #d97706 !important;
+}
+
 /* ==========================================================================
    Feed List Section
    ========================================================================== */
@@ -623,13 +711,20 @@ body {
   color: var(--text-muted);
 }
 
+.feed-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 .feed-container {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
 }
 
-/* Release Day Card Group */
+/* Release Day Card Group (Accordion) */
 .release-day-group {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
@@ -652,7 +747,13 @@ body {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
   transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.release-day-header:hover {
+  background-color: var(--bg-hover);
 }
 
 .release-date-title {
@@ -662,6 +763,22 @@ body {
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--text-main);
+}
+
+.collapse-indicator {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  display: inline-block;
+  margin-left: 0.35rem;
+}
+
+.release-day-group.collapsed .collapse-indicator {
+  transform: rotate(-90deg);
+}
+
+.release-day-group.collapsed .release-items-list {
+  display: none;
 }
 
 .calendar-icon {
@@ -725,6 +842,15 @@ body {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+}
+
+/* Search Highlight */
+.search-highlight {
+  background-color: var(--highlight-bg);
+  color: var(--highlight-text);
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+  font-weight: 600;
 }
 
 /* Category Badges */
@@ -815,8 +941,37 @@ body {
 .item-actions-group {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   flex-wrap: wrap;
+}
+
+/* Bookmark Star Button */
+.bookmark-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.bookmark-btn:hover {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.08);
+}
+
+.bookmark-btn.bookmarked {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.15);
 }
 
 .select-item-btn {
@@ -828,7 +983,7 @@ body {
   color: var(--text-muted);
   background: var(--bg-card);
   border: 1px solid var(--border-light);
-  padding: 0.35rem 0.7rem;
+  padding: 0.35rem 0.65rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -855,7 +1010,7 @@ body {
   background-color: var(--bg-card);
   color: var(--twitter-bg);
   border: 1px solid var(--border-light);
-  padding: 0.35rem 0.75rem;
+  padding: 0.35rem 0.7rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -871,7 +1026,7 @@ body {
   border-color: var(--twitter-bg);
 }
 
-/* Nút Sao chép vào bảng nhớ tạm */
+/* Nút Sao chép Plain text */
 .copy-item-btn {
   display: inline-flex;
   align-items: center;
@@ -881,7 +1036,7 @@ body {
   color: var(--text-muted);
   background: var(--bg-card);
   border: 1px solid var(--border-light);
-  padding: 0.35rem 0.7rem;
+  padding: 0.35rem 0.65rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -902,6 +1057,40 @@ body {
 .copy-icon {
   width: 14px;
   height: 14px;
+}
+
+/* Nút Sao chép Markdown */
+.copy-md-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.copy-md-btn:hover {
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+  background-color: rgba(139, 92, 246, 0.08);
+}
+
+.copy-md-btn.copied {
+  background-color: #8b5cf6 !important;
+  color: #ffffff !important;
+  border-color: #8b5cf6 !important;
+}
+
+.md-icon {
+  font-weight: 800;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
 }
 
 /* Item HTML Description */
@@ -1018,6 +1207,10 @@ body {
   animation: scaleUp 0.2s ease-out;
   display: flex;
   flex-direction: column;
+}
+
+.modal-card-sm {
+  max-width: 420px;
 }
 
 @keyframes scaleUp {
@@ -1235,6 +1428,69 @@ body {
   background: var(--modal-footer-bg);
 }
 
+/* Shortcuts list inside modal */
+.shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+
+.kbd-key {
+  display: inline-block;
+  padding: 0.25rem 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-main);
+  background-color: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  box-shadow: 0 2px 0 var(--border-light);
+  min-width: 32px;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Back to Top Floating Button
+   ========================================================================== */
+
+.back-to-top-btn {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 50;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: var(--primary);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.back-to-top-btn:hover {
+  background-color: var(--primary-hover);
+  transform: translateY(-3px);
+}
+
+.back-to-top-btn.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+}
+
 /* ==========================================================================
    Toast Notifications
    ========================================================================== */
@@ -1305,13 +1561,39 @@ body {
     justify-content: space-between;
   }
 
+  /* Mobile: Selected Bar becomes sticky bottom navigation */
+  .selected-bar {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-bottom: none;
+    border-top: 2px solid var(--primary);
+    box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.2);
+    animation: slideUp 0.25s ease-out;
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
   .selected-bar-content {
     flex-direction: column;
     align-items: flex-start;
+    padding: 0.65rem 1rem;
+    gap: 0.75rem;
   }
 
   .selected-summary-preview {
-    max-width: 260px;
+    max-width: 240px;
   }
 
   .filter-row {
@@ -1335,5 +1617,10 @@ body {
 
   .modal-footer .btn {
     width: 100%;
+  }
+
+  .back-to-top-btn {
+    bottom: 5rem;
+    right: 1.25rem;
   }
 }

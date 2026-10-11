@@ -50,9 +50,21 @@
      - **Twitter API v2:** Hỗ trợ đăng tự động qua server nếu có sẵn Bearer Token.
      - Nút sao chép nội dung vào bộ nhớ tạm (clipboard).
 
-4. **Bộ lọc & Tìm kiếm thời gian thực:**
-   - Tìm kiếm theo từ khóa văn bản (ví dụ: *Gemini*, *Iceberg*, *SQL*, *SDK*, v.v.).
-   - Lọc nhanh theo từng danh mục chỉ với một cú nhấp chuột.
+4. **Bộ lọc, Tìm kiếm & Đánh dấu từ khóa:**
+   - Tìm kiếm từ khóa thời gian thực kèm **hiệu ứng bôi sáng (Search Highlight)** trực tiếp trong văn bản.
+   - Lọc nhanh theo từng danh mục hoặc lọc theo các bản ghi **⭐ Đã lưu (Bookmarks)**.
+
+5. **Tiện ích sao chép & Xuất dữ liệu:**
+   - **Sao chép văn bản & Sao chép Markdown:** Hỗ trợ sao chép định dạng Markdown để dán vào Notion, Slack, Jira.
+   - **Xuất sang CSV:** Xuất toàn bộ dữ liệu đang hiển thị sang file `.csv` hỗ trợ UTF-8 BOM cho Excel tiếng Việt.
+
+6. **Điều hướng thông minh & Trợ năng:**
+   - **Chế độ Sáng / Tối (Dark / Light Theme):** Chuyển đổi linh hoạt qua CSS root variables và ghi nhớ lựa chọn trong `localStorage`.
+   - **Thu gọn / Mở rộng nhóm ngày (Accordion):** Nút *Thu gọn tất cả* hoặc click vào từng tiêu đề ngày để cuộn xem tiện lợi.
+   - **Nút Cuộn lên đầu trang (Back to Top):** Nút tròn nổi tự động hiện khi cuộn chuột.
+   - **Phím tắt nhanh (Keyboard Shortcuts):** Bấm `/` để tìm kiếm, `T` đổi theme, `R` làm mới, `C` thu gọn, `?` xem bảng phím tắt.
+   - **Auto-Sync:** Thông báo khi phát hiện bản phát hành mới từ Google.
+   - **Tối ưu Mobile:** Thanh tác vụ chuyển thành Bottom Bar trên điện thoại.
 
 ---
 

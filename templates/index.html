@@ -8,6 +8,15 @@
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+  <!-- Banner thông báo khi có bản cập nhật mới tự động (Auto-sync) -->
+  <aside id="newUpdateBanner" class="new-update-banner hidden" role="alert">
+    <div class="banner-content">
+      <span class="banner-text">🎉 <strong>Phát hiện bản phát hành mới từ BigQuery!</strong></span>
+      <button id="bannerRefreshBtn" class="btn btn-sm btn-primary">Cập nhật ngay</button>
+      <button id="bannerDismissBtn" class="banner-close-btn" aria-label="Đóng thông báo">&times;</button>
+    </div>
+  </aside>
+
   <!-- Header -->
   <header class="app-header">
     <div class="header-container">
@@ -49,6 +58,11 @@
             </svg>
           </span>
           <span class="theme-label" id="themeLabel">Tối</span>
+        </button>
+
+        <!-- Nút Phím tắt -->
+        <button id="shortcutsBtn" class="btn btn-secondary btn-sm" type="button" title="Xem danh sách phím tắt">
+          ⌨️ Phím tắt
         </button>
 
         <!-- Nút Làm mới với hiệu ứng xoay (spinner) -->
@@ -98,6 +112,10 @@
           <span class="stat-number" id="statItemsCount">{{ initial_data.total_items }}</span>
           <span class="stat-label">Mục cập nhật chi tiết</span>
         </div>
+        <div class="stat-item">
+          <span class="stat-number" id="statSavedCount">0</span>
+          <span class="stat-label">Bản ghi đã lưu ⭐</span>
+        </div>
         <div class="stat-item" id="feedSourceInfo">
           <span class="stat-number source-tag">XML Feed</span>
           <a href="https://docs.cloud.google.com/feeds/bigquery-release-notes.xml" target="_blank" rel="noopener noreferrer" class="source-link">
@@ -113,11 +131,13 @@
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
           <input type="text" id="searchInput" placeholder="Tìm kiếm nội dung (ví dụ: Gemini, Iceberg, SQL, SDK...)" autocomplete="off">
+          <kbd class="search-kbd" title="Nhấn phím / trên bàn phím để tìm nhanh">/</kbd>
           <button id="clearSearchBtn" class="clear-search-btn hidden" title="Xóa tìm kiếm">&times;</button>
         </div>
 
         <div class="category-filters" id="categoryFilters">
           <button class="filter-pill active" data-category="ALL">Tất cả</button>
+          <button class="filter-pill bookmark-pill" data-category="BOOKMARKED">⭐ Đã lưu (<span id="bookmarkCount">0</span>)</button>
           <button class="filter-pill" data-category="Feature">Tính năng (Feature)</button>
           <button class="filter-pill" data-category="Change">Thay đổi (Change)</button>
           <button class="filter-pill" data-category="Announcement">Thông báo</button>
@@ -135,14 +155,20 @@
           <h2 class="feed-heading">Danh sách ghi chú phát hành</h2>
           <span class="item-counter" id="itemCounter">Hiển thị <strong id="visibleCount">{{ initial_data.total_items }}</strong> cập nhật</span>
         </div>
-        <button id="exportCsvBtn" class="btn btn-secondary btn-sm" title="Xuất toàn bộ danh sách cập nhật đang hiển thị sang tệp CSV">
-          <svg class="btn-icon-sm" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          <span>Xuất sang CSV</span>
-        </button>
+        <div class="feed-header-actions">
+          <button id="toggleCollapseBtn" class="btn btn-secondary btn-sm" title="Thu gọn hoặc mở rộng toàn bộ danh sách ngày">
+            <span id="collapseIcon">📁</span>
+            <span id="collapseText">Thu gọn tất cả</span>
+          </button>
+          <button id="exportCsvBtn" class="btn btn-secondary btn-sm" title="Xuất toàn bộ danh sách cập nhật đang hiển thị sang tệp CSV">
+            <svg class="btn-icon-sm" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Xuất sang CSV</span>
+          </button>
+        </div>
       </div>
 
       <!-- Feed Container rendered via JS for interactivity -->
@@ -221,6 +247,54 @@
           </svg>
           Mở Twitter / X để đăng ngay
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nút Cuộn lên đầu trang (Back to Top) -->
+  <button id="backToTopBtn" class="back-to-top-btn hidden" type="button" title="Cuộn lên đầu trang (Phím Home)" aria-label="Cuộn lên đầu trang">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="18 15 12 9 6 15"></polyline>
+    </svg>
+  </button>
+
+  <!-- Modal Danh sách Phím tắt (Keyboard Shortcuts) -->
+  <div id="shortcutsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <div class="modal-header-title">
+          <span>⌨️</span>
+          <h3 id="shortcutsModalTitle">Phím tắt nhanh</h3>
+        </div>
+        <button id="closeShortcutsModalBtn" class="modal-close-btn" aria-label="Đóng">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="shortcuts-list">
+          <div class="shortcut-row">
+            <kbd class="kbd-key">/</kbd>
+            <span>Nhảy nhanh vào ô tìm kiếm</span>
+          </div>
+          <div class="shortcut-row">
+            <kbd class="kbd-key">T</kbd>
+            <span>Chuyển đổi giao diện Sáng / Tối</span>
+          </div>
+          <div class="shortcut-row">
+            <kbd class="kbd-key">R</kbd>
+            <span>Làm mới dữ liệu từ Google Docs Feed</span>
+          </div>
+          <div class="shortcut-row">
+            <kbd class="kbd-key">C</kbd>
+            <span>Thu gọn / Mở rộng tất cả các ngày</span>
+          </div>
+          <div class="shortcut-row">
+            <kbd class="kbd-key">Esc</kbd>
+            <span>Xóa tìm kiếm / Đóng các cửa sổ hộp thoại</span>
+          </div>
+          <div class="shortcut-row">
+            <kbd class="kbd-key">?</kbd>
+            <span>Mở bảng danh sách phím tắt này</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
